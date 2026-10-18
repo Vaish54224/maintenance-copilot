@@ -28,6 +28,15 @@ def record_call(call: dict) -> None:
     st.session_state.setdefault("calls", []).append(call)
 
 
+def show_model_error(e: Exception) -> None:
+    if isinstance(e, amd_client.AMDRateLimited):
+        st.warning(f"⏳ {e}")
+    elif isinstance(e, amd_client.AMDError):
+        st.error(f"AMD endpoint error: {e}")
+    else:
+        st.error(f"Unexpected error while calling the model ({type(e).__name__}). Please try again.")
+
+
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
     st.header("Settings")
@@ -44,9 +53,10 @@ def render_amd_panel() -> None:
         st.subheader("⚡ Powered by AMD")
         s = config.amd_settings()
         if config.is_configured():
-            st.success("AMD Token Factory connected")
+            st.success("AMD Token Factory configured")
             st.write(f"**Endpoint:** `{s['base_url']}`")
             st.write(f"**Model:** `{s['model']}`")
+            st.caption("API key: set (never displayed)")
         else:
             st.error("AMD endpoint not configured. Set AMD_API_KEY, AMD_BASE_URL, AMD_MODEL.")
         calls = st.session_state.get("calls", [])
@@ -55,6 +65,8 @@ def render_amd_panel() -> None:
             c1, c2 = st.columns(2)
             c1.metric("Last latency", f"{last['latency_s']} s")
             c2.metric("Last tokens", last["total_tokens"])
+            if last.get("prompt_tokens") is not None:
+                st.caption(f"Last call: {last['prompt_tokens']} prompt + {last['completion_tokens']} completion tokens")
             st.caption(
                 f"{len(calls)} calls · avg latency {sum(c['latency_s'] for c in calls) / len(calls):.2f} s · "
                 f"{sum(c['total_tokens'] for c in calls)} tokens total"
@@ -64,24 +76,50 @@ def render_amd_panel() -> None:
 
 
 # ---------------------------------------------------------------- data
-if up is not None:
+def read_upload(f) -> pd.DataFrame | None:
+    """Parse and validate an uploaded sensor CSV; returns None (with a message) if unusable."""
     try:
-        raw = pd.read_csv(up, parse_dates=["timestamp"])
-        missing = REQUIRED_COLS - set(raw.columns)
-        if missing:
-            st.error(f"Uploaded CSV is missing columns: {sorted(missing)}. Using demo data instead.")
-            raw = load_default()
-        else:
-            st.sidebar.success(f"Using your CSV ({len(raw)} rows)")
+        df = pd.read_csv(f)
     except Exception as e:  # noqa: BLE001
         st.error(f"Could not read CSV ({type(e).__name__}). Using demo data instead.")
-        raw = load_default()
-else:
+        return None
+    df.columns = [c.strip() for c in df.columns]
+    missing = REQUIRED_COLS - set(df.columns)
+    if missing:
+        st.error(f"Uploaded CSV is missing columns: {sorted(missing)}. Using demo data instead.")
+        return None
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    for m in detect.METRICS:
+        df[m] = pd.to_numeric(df[m], errors="coerce")
+    df["machine"] = df["machine"].astype(str)
+    df = df.dropna(subset=["timestamp", *detect.METRICS]).sort_values(["machine", "timestamp"])
+    if df.empty:
+        st.error("Uploaded CSV has no valid rows. Using demo data instead.")
+        return None
+    short = df.groupby("machine").size()
+    short = sorted(short[short <= detect.BASELINE_HOURS].index)
+    if short:
+        st.warning(
+            f"{', '.join(short)}: fewer than {detect.BASELINE_HOURS} hourly rows, so the whole window is used as baseline "
+            "and drift cannot be flagged yet."
+        )
+    st.sidebar.success(f"Using your CSV ({len(df)} rows, {df.machine.nunique()} machines)")
+    return df
+
+
+raw = (read_upload(up) if up is not None else None)
+if raw is None:
     raw = load_default()
 
-dfz = detect.add_zscores(raw)
-machines = sorted(dfz.machine.unique())
-statuses = {m: detect.machine_status(dfz, m) for m in machines}
+try:
+    dfz = detect.add_zscores(raw)
+    machines = sorted(dfz.machine.unique())
+    statuses = {m: detect.machine_status(dfz, m) for m in machines}
+except Exception as e:  # noqa: BLE001
+    st.error(f"Could not analyse the uploaded data ({type(e).__name__}). Using demo data instead.")
+    dfz = detect.add_zscores(load_default())
+    machines = sorted(dfz.machine.unique())
+    statuses = {m: detect.machine_status(dfz, m) for m in machines}
 flagged = [m for m in machines if statuses[m]["drifted"]]
 
 # ---------------------------------------------------------------- header + headline
@@ -101,7 +139,7 @@ if cmp_ and cmp_["ai_flag_time"] is not None:
     st.info(
         f"**Measurable improvement:** drift detection flagged **{target}** on {cmp_['ai_flag_time']:%b %d %H:%M}; "
         f"a fixed {detect.FIXED_VIB_ALARM} mm/s vibration alarm {fixed_txt}. "
-        f"That is **{cmp_['hours_earlier']} hours** of extra planning time × ${cost_per_hour:,}/h = **${saved:,.0f}** "
+        f"That is **{cmp_['hours_earlier']} hours** of extra planning time × \\${cost_per_hour:,}/h = **\\${saved:,.0f}** "
         "of unplanned downtime avoidable (estimate: assumes the early warning converts an unplanned stop into planned maintenance)."
     )
 else:
@@ -122,7 +160,7 @@ with tab1:
                 "First flagged": min((v["first_flag"] for v in d.values()), default=None),
             }
         )
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     sel = st.selectbox("Machine trend", machines, index=machines.index(target), key="trend_machine")
     g = statuses[sel]["frame"].set_index("timestamp")
     chart = g[["vibration_mm_s"]].copy()
@@ -141,8 +179,8 @@ with tab2:
                 res = copilot.analyze(statuses[pick], get_index())
                 record_call(res["call"])
                 st.session_state[f"res_{pick}"] = res
-            except amd_client.AMDError as e:
-                st.error(f"AMD endpoint error: {e}")
+            except Exception as e:  # noqa: BLE001
+                show_model_error(e)
     res = st.session_state.get(f"res_{pick}")
     if res:
         icon = URG_ICON[res["urgency"]]
@@ -182,28 +220,37 @@ with tab2:
 with tab3:
     cm = st.selectbox("Machine", machines, index=machines.index(target), key="chat_machine")
     st.caption("Answers are grounded in the manual and maintenance log; sources are listed under each answer.")
-    st.session_state.setdefault("chat", [])
-    for m in st.session_state["chat"]:
+    history = st.session_state.setdefault("chats", {}).setdefault(cm, [])
+    def show_sources(hits: list[dict], cited: list[str]) -> None:
+        st.caption("Sources: " + " · ".join(cited))
+        with st.expander("Source excerpts"):
+            for i, h in enumerate(hits, 1):
+                mark = "✅ " if h["source"] in cited else ""
+                st.markdown(f"**{mark}[{i}] {h['source']}**")
+                st.caption(h["text"])
+
+    for m in history:
         with st.chat_message(m["role"]):
             st.write(m["content"])
             if m.get("sources"):
-                st.caption("Sources: " + " · ".join(m["sources"]))
+                show_sources(m.get("hits", []), m["sources"])
     q = st.chat_input("e.g. How do I replace the drive-end bearing safely?", disabled=not config.is_configured())
     if q:
-        st.session_state["chat"].append({"role": "user", "content": q})
+        history.append({"role": "user", "content": q})
         with st.chat_message("user"):
             st.write(q)
         with st.chat_message("assistant"):
             try:
                 with st.spinner("Asking the AMD model…"):
                     out = copilot.ask(statuses[cm], q, get_index())
-                record_call({"latency_s": out["call"]["latency_s"], "total_tokens": out["call"]["total_tokens"]})
-                srcs = [h["source"] for h in out["hits"]]
+                record_call(out["call"])
                 st.write(out["answer"])
-                st.caption("Sources: " + " · ".join(srcs))
-                st.session_state["chat"].append({"role": "assistant", "content": out["answer"], "sources": srcs})
-            except amd_client.AMDError as e:
-                st.error(f"AMD endpoint error: {e}")
+                show_sources(out["hits"], out["sources"])
+                history.append(
+                    {"role": "assistant", "content": out["answer"], "sources": out["sources"], "hits": out["hits"]}
+                )
+            except Exception as e:  # noqa: BLE001
+                show_model_error(e)
 
 
 render_amd_panel()

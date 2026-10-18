@@ -35,6 +35,34 @@ def test_json_parsing_variants():
     assert amd_client.parse_json('<think>x</think> text {"a": 2} tail') == {"a": 2}
     assert amd_client.parse_json("not json at all") is None
     assert amd_client.parse_json('{"a": ') is None
+    assert amd_client.parse_json("") is None
+    # reasoning text with braces, then fenced answer containing nested braces
+    t = 'Thinking about {x}... answer:\n```json\n{"cause": "c", "meta": {"k": 1}, "sources": [1]}\n```'
+    assert amd_client.parse_json(t)["cause"] == "c"
+    assert amd_client.parse_json('{"cause": "c", "sources": [1, 2,],}') == {"cause": "c", "sources": [1, 2]}
+
+
+def test_rate_limit_is_reported_cleanly():
+    class R:
+        status_code, headers, text = 429, {"Retry-After": "0"}, "slow down"
+
+    orig_post, orig_sleep, orig_settings = amd_client.requests.post, amd_client.time.sleep, amd_client.config.amd_settings
+    amd_client.requests.post = lambda *a, **k: R()
+    amd_client.time.sleep = lambda s: None
+    amd_client.config.amd_settings = lambda: {"api_key": "x", "base_url": "http://test", "model": "m"}
+    try:
+        amd_client.chat([{"role": "user", "content": "hi"}])
+        raise AssertionError("expected AMDRateLimited")
+    except amd_client.AMDRateLimited:
+        pass
+    finally:
+        amd_client.requests.post, amd_client.time.sleep, amd_client.config.amd_settings = orig_post, orig_sleep, orig_settings
+
+
+def test_cited_sources():
+    hits = [{"source": "A"}, {"source": "B"}, {"source": "C"}]
+    assert copilot.cited_sources("do x [3] and y [1, 3]", hits) == ["C", "A"]
+    assert copilot.cited_sources("no cites", hits) == ["A", "B", "C"]
 
 
 def test_normalize_malformed_and_review_rules():

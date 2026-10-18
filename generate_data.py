@@ -109,11 +109,12 @@ Seal leaks show as fluid at the gland; replace seal kit, check shaft runout belo
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     df = build_sensors()
-    df.to_csv(OUT / "sensors.csv", index=False)
+    # fixed "\n" line endings so the files are byte-identical on Windows and Linux
+    df.to_csv(OUT / "sensors.csv", index=False, lineterminator="\n")
     pd.DataFrame(LOG, columns=["date", "machine", "note", "category", "downtime_hours"]).to_csv(
-        OUT / "maintenance_log.csv", index=False
+        OUT / "maintenance_log.csv", index=False, lineterminator="\n"
     )
-    (OUT / "pump_manual.md").write_text(MANUAL, encoding="utf-8")
+    (OUT / "pump_manual.md").write_text(MANUAL, encoding="utf-8", newline="\n")
     print(f"Wrote {len(df)} sensor rows, {len(LOG)} log entries, manual to {OUT}")
 
 

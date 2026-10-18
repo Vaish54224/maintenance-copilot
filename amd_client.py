@@ -11,11 +11,29 @@ import requests
 
 import config
 
+try:  # use the OS trust store (works behind corporate/antivirus TLS inspection; verification stays on)
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 CALL_LOG: list[dict] = []  # per-process log of calls (no secrets)
 
 
 class AMDError(Exception):
     pass
+
+
+class AMDRateLimited(AMDError):
+    """429 after all retries: the key's limits are shared, so ask the user to wait."""
+
+
+def _retry_after(r: requests.Response, attempt: int) -> float:
+    try:
+        return min(20.0, max(1.0, float(r.headers.get("Retry-After", ""))))
+    except ValueError:
+        return 2.0 * (attempt + 1)
 
 
 def chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 900, retries: int = 3) -> dict:
@@ -38,8 +56,13 @@ def chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 900, 
         latency = time.perf_counter() - t0
         if r.status_code == 429 or r.status_code >= 500:  # shared rate limits: back off
             last = f"HTTP {r.status_code}"
-            time.sleep(2 * (attempt + 1))
+            if attempt < retries - 1:
+                time.sleep(_retry_after(r, attempt))
             continue
+        if r.status_code in (401, 403):
+            raise AMDError(f"HTTP {r.status_code}: the AMD API key was rejected. Check AMD_API_KEY.")
+        if r.status_code == 404:
+            raise AMDError("HTTP 404: check AMD_BASE_URL (it should end in /v1) and AMD_MODEL.")
         if r.status_code == 400 and not merged and any(m["role"] == "system" for m in body["messages"]):
             # Some Gemma chat templates reject a system role: fold it into the first user message and retry.
             merged = True
@@ -51,10 +74,10 @@ def chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 900, 
             continue
         if r.status_code != 200:
             raise AMDError(f"HTTP {r.status_code}: {r.text[:300]}")
-        data = r.json()
         try:
+            data = r.json()
             text = data["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError):
+        except (ValueError, KeyError, IndexError, TypeError):
             raise AMDError("Unexpected response shape from endpoint.")
         usage = data.get("usage", {}) or {}
         rec = {
@@ -67,22 +90,31 @@ def chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 900, 
         }
         CALL_LOG.append(rec)
         return {"text": text, **rec}
+    if last == "HTTP 429":
+        raise AMDRateLimited("The AMD endpoint is rate-limiting this key (HTTP 429, limits are shared). Wait ~30 s and try again.")
     raise AMDError(f"Endpoint unavailable after {retries} attempts ({last}).")
 
 
 def parse_json(text: str) -> dict | None:
     """Extract a JSON object from model output; return None if malformed."""
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
-    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.S)
-    candidates = [fence.group(1)] if fence else []
-    start, end = text.find("{"), text.rfind("}")
-    if start != -1 and end > start:
-        candidates.append(text[start : end + 1])
+    if not text:
+        return None
+    text = re.sub(r"<(think|thinking|reasoning)>.*?</\1>", "", text, flags=re.S | re.I)
+    text = text.replace("“", '"').replace("”", '"').strip()
+    candidates = [m.group(1) for m in re.finditer(r"```(?:json|JSON)?\s*(.*?)```", text, flags=re.S)]
+    candidates.append(text)
+    dec = json.JSONDecoder()
+    found = []
     for c in candidates:
-        try:
-            obj = json.loads(c)
-            if isinstance(obj, dict):
-                return obj
-        except json.JSONDecodeError:
-            continue
+        for variant in (c, re.sub(r",\s*([}\]])", r"\1", c)):  # also try without trailing commas
+            for m in re.finditer(r"\{", variant):
+                try:
+                    obj, _ = dec.raw_decode(variant, m.start())
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(obj, dict):
+                    found.append(obj)
+            if found:
+                # prefer the largest object (the answer, not a nested fragment or an example in reasoning)
+                return max(reversed(found), key=lambda o: len(o))  # ties -> the last one (final answer)
     return None

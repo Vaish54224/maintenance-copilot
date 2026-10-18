@@ -11,10 +11,10 @@ def get(name: str, default: str = "") -> str:
         import streamlit as st
 
         if name in st.secrets:
-            return str(st.secrets[name])
+            return str(st.secrets[name]).strip()
     except Exception:
         pass
-    return os.getenv(name, default)
+    return os.getenv(name, default).strip().strip('"').strip("'")
 
 
 def amd_settings() -> dict:
