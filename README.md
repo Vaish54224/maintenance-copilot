@@ -17,13 +17,20 @@ Maintenance engineers and shift supervisors on a manufacturing floor.
 
 On the bundled demo data, drift detection flags the M3-Pump bearing fault **39 hours** before a fixed 4.5 mm/s vibration alarm fires.
 
+## Screenshots
+| Home: KPIs, fleet, annotated trend | AI diagnosis (live AMD call) | Technician chat |
+|---|---|---|
+| ![Home](docs/home.jpg) | ![Diagnosis](docs/diagnosis.jpg) | ![Chat](docs/chat.jpg) |
+
+**3-click demo:** *AI diagnosis → Diagnose with AMD*, *Technician chat → a suggested question*, then change *Downtime cost* in the sidebar. **Demo mode** (sidebar) pre-selects M3-Pump and, only if a live AMD call fails, offers a cached sample answer that is clearly labelled "not live".
+
 ## Architecture
 ```
 sensors.csv ──► detect.py (z-score drift, fixed-alarm baseline) ─┐
 manual + log ─► retrieval.py (TF-IDF chunks, top-k) ─────────────┼─► copilot.py ─► amd_client.py ─► AMD Token Factory
                                                                  │      (JSON prompt,   (OpenAI-compatible,
                                                                  │       validation)     latency + token tracking)
-                                                                 └─► app.py (Streamlit cards, chat, AMD panel)
+                                                                 └─► app.py + ui.py + styles.css (Streamlit UI, Altair charts, AMD panel)
 ```
 
 ## How AMD is used
