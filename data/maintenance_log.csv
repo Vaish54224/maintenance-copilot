@@ -1,0 +1,10 @@
+date,machine,note,category,downtime_hours
+2026-03-12,M3-Pump,Replaced drive-end bearing 6308-2RS after high vibration alarm,Bearing wear,6.5
+2026-05-02,M3-Pump,Re-greased bearings (NLGI 2 lithium complex). Vibration back to 2.4 mm/s,Lubrication,1.0
+2026-06-19,M3-Pump,"Mechanical seal leak, replaced seal kit",Seal failure,4.0
+2026-07-08,M1-Press,"Hydraulic oil filter replaced, pressure stable",Routine,0.5
+2026-08-21,M4-Compressor,"Replaced intake filter, temp dropped 4 C",Filter clogging,1.5
+2026-08-30,M3-Pump,"Coupling misalignment found at 0.15 mm, realigned with laser tool",Misalignment,3.0
+2026-09-10,M5-Mixer,Gearbox oil change,Routine,1.0
+2026-09-22,M2-Conveyor,Belt tension adjusted,Routine,0.5
+2026-09-28,M3-Pump,"Noted slight bearing noise during round, no action. Monitor.",Observation,0.0
