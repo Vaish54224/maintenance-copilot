@@ -26,6 +26,7 @@ def chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 900, 
     headers = {"Authorization": f"Bearer {s['api_key']}", "Content-Type": "application/json"}
     body = {"model": s["model"], "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
     last = None
+    merged = False
     for attempt in range(retries):
         t0 = time.perf_counter()
         try:
@@ -38,6 +39,15 @@ def chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 900, 
         if r.status_code == 429 or r.status_code >= 500:  # shared rate limits: back off
             last = f"HTTP {r.status_code}"
             time.sleep(2 * (attempt + 1))
+            continue
+        if r.status_code == 400 and not merged and any(m["role"] == "system" for m in body["messages"]):
+            # Some Gemma chat templates reject a system role: fold it into the first user message and retry.
+            merged = True
+            sys_txt = "\n".join(m["content"] for m in body["messages"] if m["role"] == "system")
+            rest = [m for m in body["messages"] if m["role"] != "system"]
+            if rest and rest[0]["role"] == "user":
+                rest[0] = {"role": "user", "content": sys_txt + "\n\n" + rest[0]["content"]}
+            body["messages"] = rest
             continue
         if r.status_code != 200:
             raise AMDError(f"HTTP {r.status_code}: {r.text[:300]}")
