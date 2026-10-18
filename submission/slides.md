@@ -19,10 +19,10 @@
 - Human-review flag when the model is unsure or urgency is high
 
 ## 4. Live demo
-**M3-Pump bearing fault**
-- Flagged by drift detection before the fixed alarm
-- One click: AMD model returns a cited diagnosis
-- Ask: "How do I replace the drive-end bearing safely?"
+**M3-Pump bearing fault** (screenshot: `docs/home.jpg`)
+- Fleet cards: M3-Pump flagged red; chart shows "AI flags drift" 39 h before "Fixed alarm fires"
+- One click: AMD model returns a cited diagnosis with urgency, confidence and a safety callout (`docs/diagnosis.jpg`)
+- Ask: "How do I replace the drive-end bearing safely?" with source chips (`docs/chat.jpg`)
 
 ## 5. How AMD powers it
 **All inference runs on AMD Token Factory: Gemma-4-31B-IT**
