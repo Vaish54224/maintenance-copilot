@@ -43,10 +43,25 @@ def record_call(call: dict) -> None:
     ss["last_error"] = None
 
 
+def key_status(key: str) -> str:
+    """Describe the configured key without revealing it (length + shape only)."""
+    if not key:
+        return "missing"
+    if any(t in key.lower() for t in ("<", ">", "your", "paste", "key-here")):
+        return "placeholder, not a real key"
+    return f"set · {len(key)} chars"
+
+
 def show_model_error(e: Exception) -> None:
     ss["last_error"] = type(e).__name__
     if isinstance(e, amd_client.AMDRateLimited):
         st.warning(f"⏳ {e}")
+    elif isinstance(e, amd_client.AMDError) and "HTTP 401" in str(e):
+        st.error(
+            f"AMD endpoint rejected the API key (HTTP 401). Key in use: {key_status(config.amd_settings()['api_key'])}. "
+            "On Streamlit Cloud open **Manage app → Settings → Secrets**, set `AMD_API_KEY = \"...\"` to your real "
+            "Token Factory key (in quotes, no spaces), save, then **Reboot app**."
+        )
     elif isinstance(e, amd_client.AMDError):
         st.error(f"AMD endpoint error: {e}")
     else:
@@ -418,7 +433,7 @@ def render_amd_panel() -> None:
     rows = [
         ("Endpoint", esc(ui.host(s["base_url"]))),
         ("Model", esc(s["model"] or "not set")),
-        ("API key", "set" if s["api_key"] else "missing"),
+        ("API key", key_status(s["api_key"])),
         ("Calls", str(len(calls))),
         ("Last call", last),
         ("Avg latency", avg),

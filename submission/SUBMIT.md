@@ -24,9 +24,9 @@
 
 ### Deploy (once)
 1. Open https://share.streamlit.io/deploy?repository=Vaish54224/maintenance-copilot&branch=main&mainModule=app.py and sign in with GitHub.
-2. **Advanced settings** → Python 3.12 → **Secrets**, paste (with your key):
+2. **Advanced settings** → Python 3.12 → **Secrets**, paste these 3 lines and replace `PASTE_FULL_KEY_FROM_.env` with the full key from your `.env` (51 characters, starts with `rc-`), keeping the quotes:
    ```
-   AMD_API_KEY = "<your key>"
+   AMD_API_KEY = "PASTE_FULL_KEY_FROM_.env"
    AMD_BASE_URL = "https://developer.amd.com.cn/radeon/api/v1"
    AMD_MODEL = "Gemma-4-31B-IT"
    ```
