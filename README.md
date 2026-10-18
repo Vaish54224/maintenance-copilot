@@ -30,19 +30,36 @@ manual + log ─► retrieval.py (TF-IDF chunks, top-k) ────────
 All model inference (diagnosis JSON and technician chat) calls the AMD Token Factory chat-completions endpoint through `amd_client.py`. The UI shows a "Powered by AMD" panel with the endpoint, model, per-call latency and token usage. No other LLM provider is used.
 
 ## Setup
+Requires Python 3.10+. `data/` is committed, so `generate_data.py` is optional.
+
+**Windows (PowerShell)**
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+py -m pip install -r requirements.txt
+Copy-Item .env.example .env      # then edit .env: AMD_API_KEY, AMD_BASE_URL, AMD_MODEL
+py check_amd.py                  # one real request: prints OK, latency and tokens
+py -m streamlit run app.py
+```
+
+**Linux / macOS**
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # fill AMD_API_KEY, AMD_BASE_URL, AMD_MODEL
-python generate_data.py     # (data/ is also committed)
-python check_amd.py         # one real request to verify endpoint, model and key
+cp .env.example .env             # then edit .env
+python check_amd.py
 streamlit run app.py
 ```
-Docker: `docker build -t maintenance-copilot . && docker run -p 8501:8501 --env-file .env maintenance-copilot`
+
+**Docker:** `docker build -t maintenance-copilot . && docker run -p 8501:8501 --env-file .env maintenance-copilot`
+
+**Streamlit Community Cloud:** deploy `app.py` from this repo and paste the three lines from `.streamlit/secrets.toml.example` (with your key) into *App settings → Secrets*.
 
 Tests (no network needed): `python tests/test_logic.py`
 
-Secrets are read from `st.secrets` first, then environment / `.env`. `.env` is git-ignored.
+Secrets are read from `st.secrets` first, then environment / `.env`. `.env` and `.streamlit/secrets.toml` are git-ignored; the key is never logged or shown in the UI.
+If you are behind antivirus or corporate HTTPS inspection, the `truststore` dependency makes Python use the OS certificate store, so TLS verification keeps working.
+The endpoint key's rate limits may be shared: the client backs off on HTTP 429 and the UI shows a "wait and retry" message instead of failing.
 
 ## Demo steps
 1. Open the app: headline shows downtime cost avoided and hours earlier vs the fixed alarm.

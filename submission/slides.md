@@ -25,8 +25,9 @@
 - Ask: "How do I replace the drive-end bearing safely?"
 
 ## 5. How AMD powers it
-**All inference runs on AMD Token Factory**
+**All inference runs on AMD Token Factory: Gemma-4-31B-IT**
 - OpenAI-compatible chat completions, structured JSON output
+- Measured: diagnosis ≈ 6–9 s / ~1,000 tokens; chat answer ≈ 7 s / ~870 tokens
 - Retrieval-grounded prompts (manual + log, TF-IDF top-k)
 - Live panel: endpoint, model, latency per call, tokens used
 - Validation + graceful fallback for malformed output

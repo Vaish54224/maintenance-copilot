@@ -1,1 +1,1 @@
-AI maintenance copilot on AMD: flags machine drift 39h before fixed alarms, explains the cause with cited manual sources, and recommends safe actions.
+AI maintenance copilot on AMD (Gemma-4-31B-IT): flags machine drift 39h before fixed alarms, explains the cause with cited manual sources and recommends safe actions.

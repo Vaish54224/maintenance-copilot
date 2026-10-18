@@ -12,7 +12,7 @@ Maintenance Copilot is a working tool for maintenance engineers and shift superv
 - **Business number up front:** hours of early warning × configurable cost per hour = estimated downtime cost avoided (about $195,000 at $5,000/h in the demo).
 
 ## How AMD is used
-Every model call (diagnosis and chat) goes to the AMD Token Factory chat-completions endpoint. The app displays a "Powered by AMD" panel with the endpoint, model, latency per call and token usage, so judges can see the integration live. The structured-JSON prompt, validation and fallback logic are built around the model's output, so inference is central to the product rather than decoration.
+Every model call (diagnosis and chat) goes to the AMD Token Factory chat-completions endpoint, running **Gemma-4-31B-IT**. Measured in the app: a full diagnosis takes about 6–9 s and ~1,000 tokens, a technician chat answer about 7 s and ~870 tokens. The app displays a "Powered by AMD" panel with the endpoint, model, latency per call and token usage, so judges can see the integration live. The structured-JSON prompt, validation and fallback logic are built around the model's output, so inference is central to the product rather than decoration.
 
 ## Impact
 - Earlier, planned maintenance instead of emergency stops.
@@ -20,7 +20,7 @@ Every model call (diagnosis and chat) goes to the AMD Token Factory chat-complet
 - Less tribal knowledge: new technicians get cited answers from the plant's own documents.
 
 ## Tech stack
-Python, Streamlit, pandas/numpy, a TF-IDF retriever written from scratch, AMD Token Factory (OpenAI-compatible API), Docker, Streamlit Community Cloud.
+Python, Streamlit, pandas/numpy, a TF-IDF retriever written from scratch, AMD Token Factory (OpenAI-compatible API) with Gemma-4-31B-IT, Docker, Streamlit Community Cloud.
 
 ## What's next
 Live sensor streams (MQTT/OPC-UA), embedding-based retrieval, vision models on AMD for defect photos, work-order creation in a CMMS, and validation on real plant data.
