@@ -52,6 +52,7 @@ streamlit run app.py
 ```
 
 **Docker:** `docker build -t maintenance-copilot . && docker run -p 8501:8501 --env-file .env maintenance-copilot`
+(Behind antivirus/corporate HTTPS inspection, export its root CA as PEM and add `--secret id=extra_ca,src=root-ca.pem` to the build. The key is never baked into the image; `.env` is in `.dockerignore`.)
 
 **Streamlit Community Cloud:** deploy `app.py` from this repo and paste the three lines from `.streamlit/secrets.toml.example` (with your key) into *App settings → Secrets*.
 
